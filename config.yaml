@@ -1,0 +1,86 @@
+# AutoClipper — Límites operativos
+# Los valores de negocio viven acá; el código los lee vía config.py.
+
+max_api_cost_per_job: 1.50      # Presupuesto máximo en USD por job (kill-switch).
+
+clip:
+  min_duration_seconds: 15      # Duración mínima de un clip final.
+  max_duration_seconds: 90      # Duración máxima de un clip final.
+  target_duration_seconds: 40   # Duración objetivo de la ventana (30-45 ideal).
+  buffer_seconds: 2             # Margen ± alrededor del hook para cortes.
+  output_resolution: 1080x1920  # Resolución de salida vertical 9:16
+
+# Composición vertical (Fase 4): clip horizontal -> clip vertical 9:16.
+vertical:
+  mode: "center_crop"          # Único modo V1: crop/scale centrado determinista.
+  max_upscale: 2.5             # Techo de upscaling; por encima, salida menor (9:16).
+
+# Subtítulos dinámicos (Fase 5): transcript -> captions -> ASS quemado en el
+# vertical preservando resolución/audio/duración. Texto SIEMPRE como dato.
+subtitles:
+  enabled: true                # Quemar subtítulos en clips_captioned/.
+  max_words_per_caption: 6     # Ancho narrativo máximo por caption (2-6 ideal).
+  max_chars_per_line: 28       # Salto de línea dentro del caption.
+  max_lines: 2                 # Máximo de líneas por caption.
+  font: ""                     # Familia (ej: "Arial"). Vacío = autodetección
+                               # segura con fallback y fail-fast si no hay.
+  font_size: 64                # Con PlayRes = resolución del clip (escala sola).
+  margin_bottom: 120           # Safe-area inferior (unidades PlayRes).
+  outline_width: 3             # Contorno para alto contraste.
+  highlight_enabled: true      # Word highlight (Hormozi) con timing de palabra.
+  highlight_color: "FF6600"    # Color de la palabra actual (RRGGBB).
+
+models:
+  whisper: "base"               # faster-whisper: tiny/base/small/medium.
+  llm: "openai/gpt-oss-120b"      # Modelo LLM para detección de hooks (Fase 2).
+
+# Detección de hooks (Fase 2) — llm_analyzer.py
+llm:
+  # mode: "api" llama al LLM real (LLM_API_KEY/LLM_BASE_URL del .env).
+  # mode: "mock" usa un analizador sintético determinista SIN red: perfecto para
+  #        tests automáticos y desarrollo offline. El e2e real de la Fase 2 usa "api".
+  mode: "api"
+  window_tokens: 3500           # Tamaño ~ de ventana de transcripción por llamada.
+  max_json_retries: 1           # Reintentos si el LLM devuelve JSON mal formado.
+  timeout_seconds: 60
+  # Costo por MILLÓN de tokens (USD), usado por el estimador ANTES de llamar.
+  price_per_million_input_usd: 1.00
+  price_per_million_output_usd: 5.00
+  estimated_output_tokens: 300  # Salida esperada por ventana para el kill-switch.
+  # Candidatos iniciales crudos por ventana que pide el prompt antes de filtrar.
+  candidates_per_window: 12
+
+# Estimador de costo ANTES de llamar a Whisper (kill-switch del Paso 0).
+# USD por hora de audio transcrita: placeholder administrable. En local/CPU es
+# ~0 (solo electricidad); si se pasa a una API/proxy remoto, ajustar acá.
+whisper:
+  cost_per_hour_usd: 0.06
+
+bins:
+  ffmpeg: "ffmpeg"
+  ffprobe: "ffprobe"
+
+downloads:
+  min_free_buffer_mb: 32         # Espacio libre mínimo extra tras la descarga.
+
+# Adquisición de YouTube (yt-dlp). YouTube exige resolver desafíos JavaScript con
+# un runtime externo; habilitar node (Node.js >=22 en PATH) es lo recomendado por
+# yt-dlp. cookies_from_browser es OPT-IN y solo se usa para casos de
+# rate-limit/edad/región; nunca se persiste ni se imprime su contenido.
+# Doc: https://github.com/yt-dlp/yt-dlp/wiki/EJS
+youtube:
+  # "node" usa Node.js del PATH; "node:C:/ruta/a/node" fija el binario;
+  # "none" deshabilita (YouTube puede perder formatos / romperse).
+  js_runtime: "node"
+  # Vacío = deshabilitado. Para habilitar, ej: "chrome", "firefox", "edge".
+  # El navegador correspondiente debe existir localmente.
+  cookies_from_browser: ""
+  # Delay entre descargas de secciones del mismo job (evita 403 por URLs
+  # firmadas que expiran). 0 = sin delay.
+  section_delay_seconds: 3
+  # Reintentos por sección fallida con backoff exponencial (1s, 2s, 4s).
+  section_max_retries: 3
+
+ffmpeg:
+  preset: "medium"
+  crf: 23

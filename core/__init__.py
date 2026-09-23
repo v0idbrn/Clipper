@@ -1,0 +1,1 @@
+"""AutoClipper — paquete de núcleo."""

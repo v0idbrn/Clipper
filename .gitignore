@@ -1,0 +1,61 @@
+# Secrets / local config
+.env
+.env.*
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Project runtime artifacts
+outputs/
+downloads/
+.ass_test/
+*.log
+
+# Media (local samples / job outputs — regenerate as needed)
+*.mp4
+*.webm
+*.mkv
+*.mov
+*.avi
+*.wav
+*.mp3
+*.m4a
+*.ass
+*.srt
+
+# Keep test fixtures (small synthetic media required by the offline suite)
+!tests/fixtures/
+!tests/fixtures/**
+
+# Claude / local agent state
+.claude/
+.opencode/

@@ -1,0 +1,8 @@
+# Fase 0-1 — dependencias mínimas del núcleo.
+typer>=0.12
+pydantic>=2.0
+PyYAML>=6.0
+pytest>=8.0
+requests>=2.31
+yt-dlp>=2026.0
+faster-whisper>=1.0
