@@ -97,4 +97,4 @@ docs/             Notas de diseño e informes
 
 ## Licencia
 
-Todos los derechos reservados salvo que se agregue una licencia más adelante.
+MIT — ver [LICENSE](LICENSE).

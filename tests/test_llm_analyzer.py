@@ -442,6 +442,52 @@ class TestTitleContract:
         # No cortado a mitad de palabra por el viejo [:60].
         assert llm_analyzer.is_valid_title(t, segs[0].text) is True
 
+    # K. Regresión V1/clip_000: fallback no acepta cláusula abierta.
+    def test_k_open_clause_ending_rejected(self):
+        # Caso real de la revalidación comercial (hook cortado en "whether there").
+        title = "We're concerned again about whether there."
+        hook = "We're concerned again about whether there"
+        issues = llm_analyzer.title_issues(title, hook)
+        assert "dangling_end" in issues
+        assert llm_analyzer.is_valid_title(title, hook) is False
+        # Sin punto final también debe rechazarse (el punto lo agregaba cosmetic).
+        assert llm_analyzer.is_valid_title(title.rstrip("."), hook) is False
+
+    def test_k_fallback_not_fragmentary_for_open_hook(self):
+        from models.schemas import HookCandidate
+
+        # Transcript real de V1: el hook [97.8, 101.3] termina a mitad de oración.
+        hook_text = "We're concerned again about whether there"
+        window = [_seg(97.85, 101.35, hook_text)]
+        bad = HookCandidate(
+            start=97.8,
+            end=101.3,
+            score=0.9,
+            title="We're concerned again about whether there.",
+            reason="r",
+        )
+        out = llm_analyzer.enforce_title_contract([bad], window)
+        got = out[0].title
+        assert got != "We're concerned again about whether there."
+        assert "whether there" not in got.lower()
+        assert llm_analyzer.is_valid_title(got, hook_text) is True
+        # Sustentado en el hook (sin inventar texto externo).
+        assert "concerned" in got.lower() or "again" in got.lower()
+
+    # L. No sobre-corregir: títulos válidos que terminan en content-words / there.
+    def test_l_valid_titles_not_rejected_by_open_clause_fix(self):
+        controls = [
+            "Never give up",
+            "A fight for a free world",
+            "Look over there",
+            "The United States Role in World Affairs",
+            "Senator Bennett vigorous speeches on the president steel seizure.",
+            "We're concerned again",
+        ]
+        for title in controls:
+            assert llm_analyzer.is_valid_title(title, ""), title
+            assert llm_analyzer.title_issues(title, "") == [], title
+
 
 # --------------------------------------------------------------------------
 # P1: advertisement selection (bloqueo de anuncios, sin falsos positivos)

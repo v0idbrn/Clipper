@@ -97,4 +97,4 @@ docs/             Design notes and reports
 
 ## License
 
-All rights reserved unless a license file is added later.
+MIT — see [LICENSE](LICENSE).

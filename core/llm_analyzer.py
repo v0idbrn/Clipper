@@ -38,11 +38,20 @@ _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 _TITLE_MAX_LEN = 120
 # Final en function-word/coma => casi siempre truncado sintáctico. No incluye
 # content-words cortas (world, war, free...) para no rechazar títulos válidos.
+# Permite punto final opcional: "United States in." sigue siendo truncado.
 _DANGLING_END_RE = re.compile(
     r"(?:[,;:-]\s*|\b(?:a|an|the|of|in|to|and|or|but|because|when|that|which|"
     r"who|whom|whose|with|for|on|at|from|by|as|is|are|was|were|be|been|being|"
     r"have|has|had|do|does|did|will|would|can|could|should|may|might|must|"
-    r"if|then|than|so|about|into|via|per)\s*)+$",
+    r"if|then|than|so|about|into|via|per)\s*)+[.!?…]?\s*$",
+    re.IGNORECASE,
+)
+# Subordinador que exige cláusula (o + sujeto/existencial sin verbo).
+# Cubre "…whether there." sin marcar "Look over there" como incompleto.
+_INCOMPLETE_CLAUSE_END_RE = re.compile(
+    r"\b(?:whether|although|though|while|until|unless|whereas|wherein|whereby)"
+    r"(?:\s+(?:or\s+not|there|here|it|this|that|these|those|they|we|you|he|she|I|one))?"
+    r"\s*[.!?…]?\s*$",
     re.IGNORECASE,
 )
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -220,13 +229,13 @@ def title_issues(title: str, hook_text: str = "") -> list[str]:
         issues.append("ellipsis_truncation")
     if _CONTROL_CHARS_RE.search(title or ""):
         issues.append("control_chars")
-    # Termina en conector/preposición o puntuación de continuación.
-    if _DANGLING_END_RE.search(t):
+    # Termina en conector/preposición o cláusula subordinada abierta.
+    if _ends_incomplete(t):
         issues.append("dangling_end")
     # Título idéntico a un fragmento obviamente incompleto del hook:
     # hook_text termina en dangling y title == tail exacto del hook.
     ht = sanitize_title(hook_text)
-    if ht and t and _DANGLING_END_RE.search(ht) and t.lower() == ht.lower():
+    if ht and t and _ends_incomplete(ht) and t.lower() == ht.lower():
         issues.append("copies_incomplete_hook")
     elif ht and t.lower() in (ht.lower(), ht.lower().rstrip(".")):
         # Copia literal completa del hook solo es problema si el hook mismo
@@ -250,6 +259,16 @@ def is_valid_title(title: str, hook_text: str = "") -> bool:
     return not title_issues(title, hook_text)
 
 
+def _ends_incomplete(text: str) -> bool:
+    """True si el texto cierra en cláusula/truncamiento sintáctico abierto."""
+    t = sanitize_title(text)
+    if not t:
+        return False
+    return bool(
+        _DANGLING_END_RE.search(t) or _INCOMPLETE_CLAUSE_END_RE.search(t)
+    )
+
+
 def _first_complete_clause(text: str, max_len: int = _TITLE_MAX_LEN) -> str:
     """Primera oración/clausula cerrada de texto real del hook, sin inventar."""
     t = sanitize_title(text)
@@ -259,10 +278,10 @@ def _first_complete_clause(text: str, max_len: int = _TITLE_MAX_LEN) -> str:
     m = re.match(r"^[^.!?]*[.!?]", t)
     if m:
         sent = sanitize_title(m.group(0))
-        if 8 <= len(sent) <= max_len and not _DANGLING_END_RE.search(sent):
+        if 8 <= len(sent) <= max_len and not _ends_incomplete(sent):
             return sent
     # Si el texto cabe completo y no dangling -> usarlo tal cual.
-    if len(t) <= max_len and not _DANGLING_END_RE.search(t):
+    if len(t) <= max_len and not _ends_incomplete(t):
         return t
     # Cortar en word-boundary antes de max_len; luego solo recortar el
     # TRASERO dangling (no palabras del medio: evita salad de auxiliares).
@@ -274,10 +293,10 @@ def _first_complete_clause(text: str, max_len: int = _TITLE_MAX_LEN) -> str:
         words = t[:cut].split()
     else:
         words = prefix.split()
-    while words and _DANGLING_END_RE.search(" ".join(words)):
+    while words and _ends_incomplete(" ".join(words)):
         words.pop()
     out = sanitize_title(" ".join(words)).rstrip(",;:- ")
-    if len(out) >= 8 and not _DANGLING_END_RE.search(out):
+    if len(out) >= 8 and not _ends_incomplete(out):
         return out
     # Fallback final: primeras palabras del hook sin dangling final.
     words = t.split()
@@ -287,7 +306,7 @@ def _first_complete_clause(text: str, max_len: int = _TITLE_MAX_LEN) -> str:
         if len(trial) > max_len - 1:
             break
         acc.append(w)
-    while acc and _DANGLING_END_RE.search(" ".join(acc)):
+    while acc and _ends_incomplete(" ".join(acc)):
         acc.pop()
     out = sanitize_title(" ".join(acc)).rstrip(",;:- ")
     return out if len(out) >= 8 else ""
@@ -344,7 +363,7 @@ def _cosmetic_title(title: str) -> str:
     """
     t = sanitize_title(title)
     if len(t) >= 40 and t[-1] not in ".!?…\"'":
-        if not _DANGLING_END_RE.search(t):
+        if not _ends_incomplete(t):
             t = t + "."
     return t[:_TITLE_MAX_LEN] if len(t) > _TITLE_MAX_LEN else t
 
